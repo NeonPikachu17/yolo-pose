@@ -1,0 +1,1 @@
+enum BodySide { left, right }
