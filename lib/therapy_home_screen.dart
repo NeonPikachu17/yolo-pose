@@ -58,6 +58,18 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
         title: "Hand to Lumbar Spine",
         subtitle: "Hand behind back",
         instructions: "Reach your hand behind your back to touch your lower spine.",
+        scoringFunction: _scoreHandtoLumbarSpine,
+      ),
+      Exercise(
+        title: "Shoulder Flexion 0-90",
+        subtitle: "Hand behind back",
+        instructions: "Reach your hand behind your back to touch your lower spine.",
+        scoringFunction: (start, end, side) => {'score': 0, 'details': 'Scoring not implemented.'},
+      ),
+      Exercise(
+        title: "Shoulder Flexion 90-180",
+        subtitle: "Hand behind back",
+        instructions: "Reach your hand behind your back to touch your lower spine.",
         scoringFunction: (start, end, side) => {'score': 0, 'details': 'Scoring not implemented.'},
       ),
     ];
@@ -80,7 +92,7 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     
     if (endAngle >= 85) {
       score = 2; // Full range of motion
-    } else if (endAngle >= 45) {
+    } else if (endAngle >= 20) {
       score = 1; // Partial range of motion
     } else {
       score = 0; // Limited range of motion
@@ -92,11 +104,49 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     };
   }
 
+  // --- SCORING FUNCTIONS ---
+  // NEW AND IMPROVED SCORING LOGIC
+  Map<String, dynamic> _scoreHandtoLumbarSpine(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
+    final shoulderIndex = side == BodySide.left ? 5 : 6;
+    final elbowIndex = side == BodySide.left ? 7 : 8;
+    final wristIndex = side == BodySide.left ? 9 : 10;
+    
+    // Calculate the starting angle as a baseline.
+    final startAngle = _calculateAngle(startKeypoints[shoulderIndex], startKeypoints[elbowIndex], startKeypoints[wristIndex]);
+    
+    // Calculate the final angle.
+    final endAngle = _calculateAngle(endKeypoints[shoulderIndex], endKeypoints[elbowIndex], endKeypoints[wristIndex]);
+    
+    // Determine the change in angle, which is the measure of movement.
+    final angleChange = (startAngle - endAngle).abs();
+    
+    int score;
+    String details;
+    
+    // Scoring based on a realistic change in angle.
+    // The smaller the end angle, the better the score.
+    if (endAngle <= 60) {
+      score = 2; // Excellent range of motion, hand is close to the lumbar spine
+      details = 'Achieved: ${endAngle.toStringAsFixed(1)}°. Excellent range of motion!';
+    } else if (endAngle <= 90) {
+      score = 1; // Good range of motion
+      details = 'Achieved: ${endAngle.toStringAsFixed(1)}°. Good range of motion.';
+    } else {
+      score = 0; // Limited range of motion
+      details = 'Achieved: ${endAngle.toStringAsFixed(1)}°. Limited range of motion.';
+    }
+
+    return {
+      'score': score,
+      'details': 'Target: <= 60.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side) - ' + details,
+    };
+  }
+
   // --- MODEL LOADING & MANAGEMENT ---
   Future<void> _loadModelFromAssets() async {
     _startLoading("Loading built-in model...");
     try {
-      const modelAssetPath = 'assets/models/yolo11n-pose_float32.tflite'; // Your model
+      const modelAssetPath = 'assets/models/yolo11m-pose_float32.tflite'; // Your model
       final modelName = p.basenameWithoutExtension(modelAssetPath);
       final directory = await getApplicationDocumentsDirectory();
       final modelPath = p.join(directory.path, p.basename(modelAssetPath));
@@ -166,8 +216,8 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
         final exerciseEntry = _exerciseData.putIfAbsent(exercise.title, () => {});
         exerciseEntry['score'] = results['score'];
         exerciseEntry['results'] = results['details'];
-        exerciseEntry['start_keypoints'] = _convertKeypointsToOffsets(startKeypoints);
-        exerciseEntry['end_keypoints'] = _convertKeypointsToOffsets(endKeypoints);
+        exerciseEntry['start_keypoints'] = _convertKeypointsToData(startKeypoints);
+        exerciseEntry['end_keypoints'] = _convertKeypointsToData(endKeypoints);
         exerciseEntry['side'] = selectedSide; // Ensure side is saved
       });
       _showSnackBar("${exercise.title} scored successfully!", isError: false);
@@ -180,24 +230,49 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
   }
   
   Future<List<Map<String, double>>?> _runInference(File imageFile) async {
-    // ... (This function is unchanged)
+    // Read the image and run inference
     final imageBytes = await imageFile.readAsBytes();
     final detections = await _yoloModel!.predict(imageBytes);
-    final allKeypoints = (detections['keypoints'] as List<dynamic>?) ?? [];
-    if (allKeypoints.isEmpty) return null;
 
+    print("Full results structure: $detections");
+    print("Results keys: ${detections.keys}");
+    // Debug: Print the raw detections
+    print('DEBUG: Raw YOLO detections: $detections');
+
+    final allKeypoints = (detections['keypoints'] as List<dynamic>?) ?? [];
+    if (allKeypoints.isEmpty) {
+      print('DEBUG: No keypoints detected.');
+      return null;
+    }
+
+    // Get the keypoints for the first detected person
     final personData = allKeypoints[0];
     final coordinates = personData['coordinates'] as List<dynamic>?;
-    if (coordinates == null) return null;
+    if (coordinates == null) {
+      print('DEBUG: Keypoint coordinates are null.');
+      return null;
+    }
 
     final List<Map<String, double>> parsedKeypoints = [];
-    for (var pointData in coordinates) {
+    for (var i = 0; i < coordinates.length; i++) {
+      var pointData = coordinates[i];
       parsedKeypoints.add({
         'x': (pointData['x'] as num).toDouble(),
         'y': (pointData['y'] as num).toDouble(),
         'confidence': (pointData['confidence'] as num).toDouble(),
       });
     }
+
+    // Debug: Print the number of parsed keypoints
+    print('DEBUG: Parsed ${parsedKeypoints.length} keypoints.');
+    
+    // Debug: Print the values of each parsed keypoint
+    for (var i = 0; i < parsedKeypoints.length; i++) {
+      final point = parsedKeypoints[i];
+      print('DEBUG: Keypoint $i (x: ${point['x']!.toStringAsFixed(2)}, y: ${point['y']!.toStringAsFixed(2)}, confidence: ${point['confidence']!.toStringAsFixed(2)})');
+    }
+
+    // Check if all 17 keypoints were detected
     return parsedKeypoints.length == 17 ? parsedKeypoints : null;
   }
 
@@ -217,6 +292,7 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
       entry[imageType] = imageFile;
       entry['side'] = side;
     });
+    print('DEBUG: Saved side for $exerciseTitle is ${side.name}');
   }
 
   int get _currentScore {
@@ -227,16 +303,19 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     return score;
   }
 
-  List<Offset>? _convertKeypointsToOffsets(List<Map<String, double>>? keypoints) {
-    if (keypoints == null) return null;
-    final List<Offset> offsets = [];
-    for (var point in keypoints) {
-      if (point['x'] != null && point['y'] != null) {
-        offsets.add(Offset(point['x']!, point['y']!));
-      }
-    }
-    return offsets.isNotEmpty ? offsets : null;
+List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints) {
+  if (keypoints == null) return null;
+  final List<KeypointData> keypointDataList = [];
+  for (var point in keypoints) {
+   if (point['x'] != null && point['y'] != null && point['confidence'] != null) {
+    keypointDataList.add(KeypointData(
+     Offset(point['x']!, point['y']!), 
+     point['confidence']!
+    ));
+   }
   }
+  return keypointDataList.isNotEmpty ? keypointDataList : null;
+}
 
   // --- UI BUILD METHODS ---
   @override
@@ -600,4 +679,11 @@ class ScoreGaugePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
     return true; 
   }
+}
+
+  // New data class to hold keypoint and confidence
+class KeypointData {
+  final Offset offset;
+  final double confidence;
+  KeypointData(this.offset, this.confidence);
 }

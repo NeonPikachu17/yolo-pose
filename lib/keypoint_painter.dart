@@ -1,50 +1,48 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:google_fonts/google_fonts.dart';
+
+// Import the KeypointData class
+import 'therapy_home_screen.dart';
 
 class KeypointPainter extends CustomPainter {
-  /// The list of normalized keypoint coordinates to draw.
-  final List<Offset> keypoints;
-  // The size of the image, to correctly scale the points.
-  final Size imageSize;
+   /// The list of keypoint data to draw.
+   final List<KeypointData> keypoints;
+   // The size of the image, to correctly scale the points.
+   final Size imageSize;
 
-  KeypointPainter({required this.keypoints, required this.imageSize});
+   // FIX: Updated the constructor to accept List<KeypointData>
+   KeypointPainter({required this.keypoints, required this.imageSize});
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Define the style for the points (dots)
-    final pointPaint = Paint()
-      ..color = Colors.red
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 8.0; // Dot size
+   @override
+   void paint(Canvas canvas, Size size) {
+     // Define the style for the points (dots)
+     final pointPaint = Paint()
+        ..color = Colors.red
+        ..strokeCap = StrokeCap.round
+        ..strokeWidth = 8.0; // Dot size
 
-    // Define the style for the lines
-    final linePaint = Paint()
-      ..color = Colors.yellowAccent
-      ..strokeWidth = 3.0;
+     // Define the style for the lines
+     final linePaint = Paint()
+        ..color = Colors.yellowAccent
+        ..strokeWidth = 3.0;
 
-    // Draw each keypoint as a dot
-    for (final point in keypoints) {
-      // Scale the normalized coordinates to the actual widget size
-      final canvasPoint = Offset(point.dx * size.width, point.dy * size.height);
-      
-      // --- FIX IS HERE ---
-      // Change PaintingStyle.fill to PointMode.points
-      canvas.drawPoints(PointMode.points, [canvasPoint], pointPaint);
-    }
+     // Filter out keypoints with a low confidence score
+     final List<Offset> highConfidencePoints = [];
+     for (final kp in keypoints) {
+        if (kp.confidence >= 0.3) {
+          highConfidencePoints.add(Offset(kp.offset.dx * size.width, kp.offset.dy * size.height));
+        }
+     }
 
-    // --- Example: Draw lines connecting the points ---
-    // This logic depends on which points you want to connect (e.g., elbow-to-wrist).
-    // For this example, we'll just connect them in order.
-    for (int i = 0; i < keypoints.length - 1; i++) {
-      final startPoint = Offset(keypoints[i].dx * size.width, keypoints[i].dy * size.height);
-      final endPoint = Offset(keypoints[i + 1].dx * size.width, keypoints[i + 1].dy * size.height);
-      canvas.drawLine(startPoint, endPoint, linePaint);
-    }
-  }
+     // Draw each keypoint as a dot, after scaling
+     canvas.drawPoints(PointMode.points, highConfidencePoints, pointPaint);
+   }
 
-  @override
-  bool shouldRepaint(covariant KeypointPainter oldDelegate) {
-    // Repaint only if the keypoints or image size have changed.
-    return oldDelegate.keypoints != keypoints || oldDelegate.imageSize != imageSize;
-  }
+   @override
+   bool shouldRepaint(covariant KeypointPainter oldDelegate) {
+     // Repaint only if the keypoints or image size have changed.
+     // The comparison needs to be updated to account for the new data type.
+     return oldDelegate.keypoints != keypoints || oldDelegate.imageSize != imageSize;
+   }
 }
