@@ -11,6 +11,7 @@ import 'body_side.dart'; // Import the new enum
 import 'results_summary_screen.dart';
 import 'exercise_upload_sheet.dart';
 import 'submitted_photos_screen.dart';
+import 'package:image/image.dart' as img;
 
 // --- DATA MODELS ---
 class Exercise {
@@ -75,70 +76,170 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     ];
     _loadModelFromAssets();
   }
-  
-  // --- SCORING FUNCTIONS ---
-  Map<String, dynamic> _scoreShoulderAbduction(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
-    // COCO Keypoint indices:
-    // Left side: LHip=11, LShoulder=5, LElbow=7
-    // Right side: RHip=12, RShoulder=6, RElbow=8
+
+   /// Calculates the angle between three points (p1, p2, p3) where p2 is the vertex.
+  double _calculateAngle(Map<String, double> p1, Map<String, double> p2, Map<String, double> p3) {
+    // Return 0.0 if any keypoint has low confidence to avoid bad calculations.
+    if (p1['confidence']! < 0.3 || p2['confidence']! < 0.3 || p3['confidence']! < 0.3) return 0.0;
     
-    // FIX: Corrected the indices for the right side.
+    double angle = (math.atan2(p3['y']! - p2['y']!, p3['x']! - p2['x']!) - math.atan2(p1['y']! - p2['y']!, p1['x']! - p2['x']!)) * 180 / math.pi;
+    angle = angle.abs();
+    if (angle > 180) {
+      angle = 360 - angle;
+    }
+    return angle;
+  }
+
+  /// Calculates the distance between two keypoints. Used for sanity checks.
+  double _calculateDistance(Map<String, double> p1, Map<String, double> p2) {
+    final dx = p1['x']! - p2['x']!;
+    final dy = p1['y']! - p2['y']!;
+    return math.sqrt(dx * dx + dy * dy);
+  }
+
+
+  Future<File> _normalizeImageOrientation(String imagePath) async {
+    // Read the original image file as bytes
+    final imageBytes = await File(imagePath).readAsBytes();
+
+    // Decode the image using the 'image' package
+    final originalImage = img.decodeImage(imageBytes);
+
+    // If the image can't be decoded, return the original file
+    if (originalImage == null) {
+      return File(imagePath);
+    }
+
+    // The magic happens here: bakeOrientation reads the EXIF orientation
+    // and applies the necessary rotation/flipping to the image pixels.
+    final fixedImage = img.bakeOrientation(originalImage);
+
+    // Get a temporary directory to save the new file
+    final directory = await getTemporaryDirectory();
+    final newPath = p.join(directory.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+    final newFile = File(newPath);
+
+    // Encode the fixed image to JPEG format and write it to the new file
+    await newFile.writeAsBytes(img.encodeJpg(fixedImage));
+
+    return newFile;
+  }
+  
+  /// Scores shoulder abduction from 0 to 90 degrees.
+  Map<String, dynamic> _scoreShoulderAbduction(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
     final hipIndex = side == BodySide.left ? 11 : 12;
-    final shoulderIndex = side == BodySide.left ? 5 : 6; // Was 7 for right side, now corrected to 6
+    final shoulderIndex = side == BodySide.left ? 5 : 6;
     final elbowIndex = side == BodySide.left ? 7 : 8;
 
-    final endAngle = _calculateAngle(endKeypoints[hipIndex], endKeypoints[shoulderIndex], endKeypoints[elbowIndex]);
+    final endShoulder = endKeypoints[shoulderIndex];
+    final endElbow = endKeypoints[elbowIndex];
+    final endHip = endKeypoints[hipIndex];
+
+    // Sanity Check: Ensure the arm was actually detected.
+    final shoulderElbowDistance = _calculateDistance(endShoulder, endElbow);
+    if (shoulderElbowDistance < 0.05) {
+      return {'score': 0, 'details': 'Could not reliably detect arm position. Please retake the photo.'};
+    }
+
+    final endAngle = _calculateAngle(endHip, endShoulder, endElbow);
     int score;
-    
-    if (endAngle >= 85) {
-      score = 2; // Full range of motion
-    } else if (endAngle >= 20) {
-      score = 1; // Partial range of motion
-    } else {
-      score = 0; // Limited range of motion
+    String motionQuality;
+
+    if (endAngle >= 85) { // Target is 90°, so >= 85° is a good range for "full"
+      score = 2;
+      motionQuality = "Full range of motion.";
+    } else if (endAngle >= 45) { // Meaningful partial motion
+      score = 1;
+      motionQuality = "Partial range of motion.";
+    } else { // All other cases
+      score = 0;
+      motionQuality = "Limited range of motion.";
     }
 
     return {
       'score': score,
-      'details': 'Target: 90.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side)'
+      'details': 'Target: 90.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
-  // --- SCORING FUNCTIONS ---
-  // NEW AND IMPROVED SCORING LOGIC
+  /// Scores shoulder flexion from 0 to 90 degrees. Logic is identical to abduction.
+  Map<String, dynamic> _scoreShoulderFlexion_0_90(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
+    // This movement uses the same keypoints and target angle as abduction.
+    return _scoreShoulderAbduction(startKeypoints, endKeypoints, side);
+  }
+
+  /// Scores shoulder flexion from 90 to 180 degrees (full overhead reach).
+  Map<String, dynamic> _scoreShoulderFlexion_90_180(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
+    final hipIndex = side == BodySide.left ? 11 : 12;
+    final shoulderIndex = side == BodySide.left ? 5 : 6;
+    final elbowIndex = side == BodySide.left ? 7 : 8;
+
+    final endShoulder = endKeypoints[shoulderIndex];
+    final endElbow = endKeypoints[elbowIndex];
+    final endHip = endKeypoints[hipIndex];
+    
+    // Sanity Check
+    final shoulderElbowDistance = _calculateDistance(endShoulder, endElbow);
+    if (shoulderElbowDistance < 0.05) {
+      return {'score': 0, 'details': 'Could not reliably detect arm position. Please retake the photo.'};
+    }
+
+    final endAngle = _calculateAngle(endHip, endShoulder, endElbow);
+    int score;
+    String motionQuality;
+
+    if (endAngle >= 160) { // Target is 170-180°, so >= 160° is "full"
+      score = 2;
+      motionQuality = "Full overhead range.";
+    } else if (endAngle >= 120) { // Clearly above shoulder level
+      score = 1;
+      motionQuality = "Partial overhead range.";
+    } else { // Not reaching significantly overhead
+      score = 0;
+      motionQuality = "Limited overhead range.";
+    }
+
+    return {
+      'score': score,
+      'details': 'Target: 170.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
+    };
+  }
+
+  /// Scores the hand-to-lumbar-spine movement.
   Map<String, dynamic> _scoreHandtoLumbarSpine(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
     final shoulderIndex = side == BodySide.left ? 5 : 6;
     final elbowIndex = side == BodySide.left ? 7 : 8;
     final wristIndex = side == BodySide.left ? 9 : 10;
     
-    // Calculate the starting angle as a baseline.
-    final startAngle = _calculateAngle(startKeypoints[shoulderIndex], startKeypoints[elbowIndex], startKeypoints[wristIndex]);
-    
-    // Calculate the final angle.
-    final endAngle = _calculateAngle(endKeypoints[shoulderIndex], endKeypoints[elbowIndex], endKeypoints[wristIndex]);
-    
-    // Determine the change in angle, which is the measure of movement.
-    final angleChange = (startAngle - endAngle).abs();
-    
+    final endShoulder = endKeypoints[shoulderIndex];
+    final endElbow = endKeypoints[elbowIndex];
+    final endWrist = endKeypoints[wristIndex];
+
+    // Sanity Check
+    final elbowWristDistance = _calculateDistance(endElbow, endWrist);
+    if (elbowWristDistance < 0.05) {
+      return {'score': 0, 'details': 'Could not reliably detect hand position. Please retake the photo.'};
+    }
+
+    final endAngle = _calculateAngle(endShoulder, endElbow, endWrist);
     int score;
-    String details;
+    String motionQuality;
     
-    // Scoring based on a realistic change in angle.
-    // The smaller the end angle, the better the score.
-    if (endAngle <= 60) {
-      score = 2; // Excellent range of motion, hand is close to the lumbar spine
-      details = 'Achieved: ${endAngle.toStringAsFixed(1)}°. Excellent range of motion!';
-    } else if (endAngle <= 90) {
-      score = 1; // Good range of motion
-      details = 'Achieved: ${endAngle.toStringAsFixed(1)}°. Good range of motion.';
+    // For this exercise, a smaller angle means more rotation and is better.
+    if (endAngle <= 70) {
+      score = 2;
+      motionQuality = "Excellent internal rotation.";
+    } else if (endAngle <= 100) {
+      score = 1;
+      motionQuality = "Good internal rotation.";
     } else {
-      score = 0; // Limited range of motion
-      details = 'Achieved: ${endAngle.toStringAsFixed(1)}°. Limited range of motion.';
+      score = 0;
+      motionQuality = "Limited internal rotation.";
     }
 
     return {
       'score': score,
-      'details': 'Target: <= 60.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side) - ' + details,
+      'details': 'Target: <= 70.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
@@ -276,15 +377,6 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     return parsedKeypoints.length == 17 ? parsedKeypoints : null;
   }
 
-  double _calculateAngle(Map<String, double> p1, Map<String, double> p2, Map<String, double> p3) {
-    // ... (This function is unchanged)
-    if (p1['confidence']! < 0.3 || p2['confidence']! < 0.3 || p3['confidence']! < 0.3) return 0.0;
-    double angle = (math.atan2(p3['y']! - p2['y']!, p3['x']! - p2['x']!) - math.atan2(p1['y']! - p2['y']!, p1['x']! - p2['x']!)) * 180 / math.pi;
-    angle = angle.abs();
-    if (angle > 180) angle = 360 - angle;
-    return angle;
-  }
-  
   // MODIFIED: Now also accepts and stores the selected body side
   void _onImageUploaded(String exerciseTitle, String imageType, File imageFile, BodySide side) {
     setState(() {
@@ -322,13 +414,11 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
   Widget build(BuildContext context) {
     final int currentScore = _currentScore;
     final int maxScore = exercises.length * 2;
-    final bool allExercisesCompleted = exercises.every((ex) => (_exerciseData[ex.title]?['score'] as int?) != null);
+    final bool allExercisesCompleted = _exerciseData.length == exercises.length && _exerciseData.values.every((data) => data.containsKey('score'));
 
     return Scaffold(
       backgroundColor: Colors.white,
-      // MODIFIED: The AppBar is now cleaner, with no manual load button.
       appBar: AppBar(
-        // The status display remains to give feedback on the loaded model.
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24.0),
           child: Padding(
@@ -343,15 +433,15 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
           ),
         ),
       ),
-      bottomNavigationBar: allExercisesCompleted
-        ? _buildSubmitButton(context)
-        : null,
+      bottomNavigationBar: allExercisesCompleted ? _buildSubmitButton(context) : null,
       body: _isLoading
-        ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 20),
-            Text(_loadingMessage ?? "Loading...", style: Theme.of(context).textTheme.bodyLarge),
-          ]))
+        ? Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              Text(_loadingMessage ?? "Loading...", style: Theme.of(context).textTheme.bodyLarge),
+            ]),
+          )
         : ListView(
             padding: const EdgeInsets.all(24.0),
             children: [
@@ -423,7 +513,6 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
   }
 
   Widget _buildScoreCard(int currentScore, int maxScore) {
-    // ... (This widget's code is unchanged)
     return Card(
       elevation: 0,
       clipBehavior: Clip.antiAlias,
@@ -433,23 +522,35 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
         padding: const EdgeInsets.all(20.0),
         child: Row(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Completion Progress", style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: _exerciseData.isNotEmpty
-                      ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => SubmittedPhotosScreen(exerciseData: _exerciseData)))
-                      : null,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade400, foregroundColor: Colors.black, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-                  child: Text("View Results", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                )
-              ],
+            // Wrap the Column with an Expanded widget.
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Completion Progress", 
+                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade700)
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _exerciseData.isNotEmpty
+                        ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => SubmittedPhotosScreen(exerciseData: _exerciseData)))
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey.shade400, 
+                      foregroundColor: Colors.black, 
+                      elevation: 0, 
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)
+                    ),
+                    child: Text("View Results", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                  )
+                ],
+              ),
             ),
-            const Spacer(),
+            // Use a SizedBox for consistent spacing instead of Spacers.
+            const SizedBox(width: 16), 
             ScoreGauge(score: currentScore, maxScore: maxScore),
-            const Spacer(),
           ],
         ),
       ),

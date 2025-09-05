@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -90,34 +92,57 @@ class ResultsSummaryScreen extends StatelessWidget {
 }
 
 // A widget for each item in the summary list
+// A widget for each item in the summary list
 class _SummaryTile extends StatelessWidget {
   final String title;
   final int score;
+  final File? startImage; // <-- ADD THIS
+  final File? endImage;   // <-- ADD THIS
+  final VoidCallback? onTap; // <-- ADD THIS
 
-  const _SummaryTile({required this.title, required this.score});
+  const _SummaryTile({
+    required this.title,
+    required this.score,
+    this.startImage, // <-- ADD THIS
+    this.endImage,   // <-- ADD THIS
+    this.onTap,      // <-- ADD THIS
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6.0),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade800,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title, style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: Colors.white,
-            child: Text(
-              score.toString(),
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.black),
+    // Wrap the Container with InkWell to make it tappable
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade800,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Added Expanded to prevent text overflow if the title is long
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 16), // Add spacing
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: Colors.white,
+              child: Text(
+                score.toString(),
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

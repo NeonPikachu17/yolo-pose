@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image/image.dart' as img;
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 import 'therapy_home_screen.dart'; 
 import 'body_side.dart';
@@ -30,10 +33,41 @@ class _ExerciseUploadSheetState extends State<ExerciseUploadSheet> {
   Future<void> _pickImage(ImageSource source, Function(File) onSelect) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: source, imageQuality: 80);
+
     if (pickedFile != null) {
-      final imageFile = File(pickedFile.path);
-      onSelect(imageFile);
+      // --- INTEGRATION POINT ---
+      // Instead of using the file directly, first normalize it.
+      final normalizedImageFile = await _normalizeImageOrientation(pickedFile.path);
+      onSelect(normalizedImageFile); // Use the corrected file
+      // --- END OF FIX ---
     }
+  }
+
+  Future<File> _normalizeImageOrientation(String imagePath) async {
+    // Read the original image file as bytes
+    final imageBytes = await File(imagePath).readAsBytes();
+
+    // Decode the image using the 'image' package
+    final originalImage = img.decodeImage(imageBytes);
+
+    // If the image can't be decoded, return the original file
+    if (originalImage == null) {
+      return File(imagePath);
+    }
+
+    // The magic happens here: bakeOrientation reads the EXIF orientation
+    // and applies the necessary rotation/flipping to the image pixels.
+    final fixedImage = img.bakeOrientation(originalImage);
+
+    // Get a temporary directory to save the new file
+    final directory = await getTemporaryDirectory();
+    final newPath = p.join(directory.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
+    final newFile = File(newPath);
+
+    // Encode the fixed image to JPEG format and write it to the new file
+    await newFile.writeAsBytes(img.encodeJpg(fixedImage));
+
+    return newFile;
   }
 
   @override

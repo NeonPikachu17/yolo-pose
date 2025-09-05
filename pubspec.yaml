@@ -36,6 +36,7 @@ dependencies:
   path_provider: ^2.1.5
   file_picker: ^10.2.0
   google_fonts: ^6.2.1
+  image: ^4.5.4
 
   # firebase
   shared_preferences: ^2.5.3
