@@ -62,16 +62,16 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
         scoringFunction: _scoreHandtoLumbarSpine,
       ),
       Exercise(
-        title: "Shoulder Flexion 0-90",
-        subtitle: "Hand behind back",
-        instructions: "Reach your hand behind your back to touch your lower spine.",
-        scoringFunction: (start, end, side) => {'score': 0, 'details': 'Scoring not implemented.'},
+        title: "Shoulder Flexion 0°-90°",
+        subtitle: "Arm forward to shoulder",
+        instructions: "Raise your arm straight forward until it is level with your shoulder.",
+        scoringFunction: _scoreShoulderFlexion_0_90,
       ),
       Exercise(
-        title: "Shoulder Flexion 90-180",
-        subtitle: "Hand behind back",
-        instructions: "Reach your hand behind your back to touch your lower spine.",
-        scoringFunction: (start, end, side) => {'score': 0, 'details': 'Scoring not implemented.'},
+        title: "Shoulder Flexion 90°-180°",
+        subtitle: "Arm Overhead",
+        instructions: "Continue raising your arm upward from shoulder level until it is overhead.",
+        scoringFunction: _scoreShoulderFlexion_90_180,
       ),
     ];
     _loadModelFromAssets();
@@ -148,12 +148,12 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     if (endAngle >= 85) { // Target is 90°, so >= 85° is a good range for "full"
       score = 2;
       motionQuality = "Full range of motion.";
-    } else if (endAngle >= 45) { // Meaningful partial motion
+    } else if (endAngle >= 10) { // Meaningful partial motion
       score = 1;
       motionQuality = "Partial range of motion.";
     } else { // All other cases
       score = 0;
-      motionQuality = "Limited range of motion.";
+      motionQuality = "Zero range of motion.";
     }
 
     return {
@@ -190,13 +190,13 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
 
     if (endAngle >= 160) { // Target is 170-180°, so >= 160° is "full"
       score = 2;
-      motionQuality = "Full overhead range.";
-    } else if (endAngle >= 120) { // Clearly above shoulder level
+      motionQuality = "Full range of motion.";
+    } else if (endAngle >= 90) { // Clearly above shoulder level
       score = 1;
-      motionQuality = "Partial overhead range.";
+      motionQuality = "Partial range of motion.";
     } else { // Not reaching significantly overhead
       score = 0;
-      motionQuality = "Limited overhead range.";
+      motionQuality = "Zero range of motion.";
     }
 
     return {
@@ -228,13 +228,13 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     // For this exercise, a smaller angle means more rotation and is better.
     if (endAngle <= 70) {
       score = 2;
-      motionQuality = "Excellent internal rotation.";
-    } else if (endAngle <= 100) {
+      motionQuality = "Full internal rotation.";
+    } else if (endAngle <= 160) {
       score = 1;
-      motionQuality = "Good internal rotation.";
+      motionQuality = "Partial internal rotation.";
     } else {
       score = 0;
-      motionQuality = "Limited internal rotation.";
+      motionQuality = "Zero internal rotation.";
     }
 
     return {
@@ -417,8 +417,9 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
     final bool allExercisesCompleted = _exerciseData.length == exercises.length && _exerciseData.values.every((data) => data.containsKey('score'));
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Color.fromARGB(255, 255, 255, 255),
       appBar: AppBar(
+        backgroundColor: Colors.blue.shade100, // light blue appbar
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24.0),
           child: Padding(
@@ -499,7 +500,7 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
           );
         },
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.black,
+          backgroundColor: Colors.green.shade400, // softer green
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 60),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
@@ -517,7 +518,7 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
       elevation: 0,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      color: const Color(0xFFF5F5F5),
+      color:  Colors.blue.shade50, // light pastel blue,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Row(
@@ -537,8 +538,7 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
                         ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => SubmittedPhotosScreen(exerciseData: _exerciseData)))
                         : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey.shade400, 
-                      foregroundColor: Colors.black, 
+                      backgroundColor: Colors.green.shade200, foregroundColor: Colors.green.shade900, 
                       elevation: 0, 
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)
@@ -683,7 +683,7 @@ class ScoreGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Use provided colors/styles or fall back to default values.
-    final pColor = progressColor ?? Colors.black;
+    final pColor = progressColor ?? Colors.green.shade700;
     final bgColor = backgroundColor ?? Colors.grey.shade300;
 
     return SizedBox(
