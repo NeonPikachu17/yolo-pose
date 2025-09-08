@@ -7,18 +7,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 import 'package:path/path.dart' as p;
 
-import 'body_side.dart'; // Import the new enum
+import 'body_side.dart';
 import 'results_summary_screen.dart';
 import 'exercise_upload_sheet.dart';
 import 'submitted_photos_screen.dart';
-import 'package:image/image.dart' as img;
 
 // --- DATA MODELS ---
 class Exercise {
   final String title;
   final String subtitle;
   final String instructions;
-  // MODIFIED: Scoring function now accepts a BodySide
   final Function(List<Map<String, double>>, List<Map<String, double>>, BodySide) scoringFunction;
 
   Exercise({
@@ -77,9 +75,8 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     _loadModelFromAssets();
   }
 
-   /// Calculates the angle between three points (p1, p2, p3) where p2 is the vertex.
+  /// Calculates the angle between three points (p1, p2, p3) where p2 is the vertex.
   double _calculateAngle(Map<String, double> p1, Map<String, double> p2, Map<String, double> p3) {
-    // Return 0.0 if any keypoint has low confidence to avoid bad calculations.
     if (p1['confidence']! < 0.3 || p2['confidence']! < 0.3 || p3['confidence']! < 0.3) return 0.0;
     
     double angle = (math.atan2(p3['y']! - p2['y']!, p3['x']! - p2['x']!) - math.atan2(p1['y']! - p2['y']!, p1['x']! - p2['x']!)) * 180 / math.pi;
@@ -97,135 +94,91 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     return math.sqrt(dx * dx + dy * dy);
   }
 
-
-  Future<File> _normalizeImageOrientation(String imagePath) async {
-    // Read the original image file as bytes
-    final imageBytes = await File(imagePath).readAsBytes();
-
-    // Decode the image using the 'image' package
-    final originalImage = img.decodeImage(imageBytes);
-
-    // If the image can't be decoded, return the original file
-    if (originalImage == null) {
-      return File(imagePath);
-    }
-
-    // The magic happens here: bakeOrientation reads the EXIF orientation
-    // and applies the necessary rotation/flipping to the image pixels.
-    final fixedImage = img.bakeOrientation(originalImage);
-
-    // Get a temporary directory to save the new file
-    final directory = await getTemporaryDirectory();
-    final newPath = p.join(directory.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
-    final newFile = File(newPath);
-
-    // Encode the fixed image to JPEG format and write it to the new file
-    await newFile.writeAsBytes(img.encodeJpg(fixedImage));
-
-    return newFile;
-  }
-  
-  /// Scores shoulder abduction from 0 to 90 degrees.
+  // -------------- SCORING FUNCTIONS --------------------------------
   Map<String, dynamic> _scoreShoulderAbduction(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
     final hipIndex = side == BodySide.left ? 11 : 12;
     final shoulderIndex = side == BodySide.left ? 5 : 6;
     final elbowIndex = side == BodySide.left ? 7 : 8;
-
     final endShoulder = endKeypoints[shoulderIndex];
     final endElbow = endKeypoints[elbowIndex];
     final endHip = endKeypoints[hipIndex];
 
-    // Sanity Check: Ensure the arm was actually detected.
     final shoulderElbowDistance = _calculateDistance(endShoulder, endElbow);
     if (shoulderElbowDistance < 0.05) {
       return {'score': 0, 'details': 'Could not reliably detect arm position. Please retake the photo.'};
     }
-
     final endAngle = _calculateAngle(endHip, endShoulder, endElbow);
     int score;
     String motionQuality;
 
-    if (endAngle >= 85) { // Target is 90°, so >= 85° is a good range for "full"
+    if (endAngle >= 85) {
       score = 2;
       motionQuality = "Full range of motion.";
-    } else if (endAngle >= 10) { // Meaningful partial motion
+    } else if (endAngle >= 10) {
       score = 1;
       motionQuality = "Partial range of motion.";
-    } else { // All other cases
+    } else {
       score = 0;
       motionQuality = "Zero range of motion.";
     }
-
     return {
       'score': score,
       'details': 'Target: 90.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
-  /// Scores shoulder flexion from 0 to 90 degrees. Logic is identical to abduction.
   Map<String, dynamic> _scoreShoulderFlexion_0_90(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
-    // This movement uses the same keypoints and target angle as abduction.
     return _scoreShoulderAbduction(startKeypoints, endKeypoints, side);
   }
 
-  /// Scores shoulder flexion from 90 to 180 degrees (full overhead reach).
   Map<String, dynamic> _scoreShoulderFlexion_90_180(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
     final hipIndex = side == BodySide.left ? 11 : 12;
     final shoulderIndex = side == BodySide.left ? 5 : 6;
     final elbowIndex = side == BodySide.left ? 7 : 8;
-
     final endShoulder = endKeypoints[shoulderIndex];
     final endElbow = endKeypoints[elbowIndex];
     final endHip = endKeypoints[hipIndex];
     
-    // Sanity Check
     final shoulderElbowDistance = _calculateDistance(endShoulder, endElbow);
     if (shoulderElbowDistance < 0.05) {
       return {'score': 0, 'details': 'Could not reliably detect arm position. Please retake the photo.'};
     }
-
     final endAngle = _calculateAngle(endHip, endShoulder, endElbow);
     int score;
     String motionQuality;
 
-    if (endAngle >= 160) { // Target is 170-180°, so >= 160° is "full"
+    if (endAngle >= 160) {
       score = 2;
       motionQuality = "Full range of motion.";
-    } else if (endAngle >= 90) { // Clearly above shoulder level
+    } else if (endAngle >= 90) {
       score = 1;
       motionQuality = "Partial range of motion.";
-    } else { // Not reaching significantly overhead
+    } else {
       score = 0;
       motionQuality = "Zero range of motion.";
     }
-
     return {
       'score': score,
       'details': 'Target: 170.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
-  /// Scores the hand-to-lumbar-spine movement.
   Map<String, dynamic> _scoreHandtoLumbarSpine(List<Map<String, double>> startKeypoints, List<Map<String, double>> endKeypoints, BodySide side) {
     final shoulderIndex = side == BodySide.left ? 5 : 6;
     final elbowIndex = side == BodySide.left ? 7 : 8;
     final wristIndex = side == BodySide.left ? 9 : 10;
-    
     final endShoulder = endKeypoints[shoulderIndex];
     final endElbow = endKeypoints[elbowIndex];
     final endWrist = endKeypoints[wristIndex];
 
-    // Sanity Check
     final elbowWristDistance = _calculateDistance(endElbow, endWrist);
     if (elbowWristDistance < 0.05) {
       return {'score': 0, 'details': 'Could not reliably detect hand position. Please retake the photo.'};
     }
-
     final endAngle = _calculateAngle(endShoulder, endElbow, endWrist);
     int score;
     String motionQuality;
     
-    // For this exercise, a smaller angle means more rotation and is better.
     if (endAngle <= 70) {
       score = 2;
       motionQuality = "Full internal rotation.";
@@ -236,18 +189,17 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
       score = 0;
       motionQuality = "Zero internal rotation.";
     }
-
     return {
       'score': score,
       'details': 'Target: <= 70.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
-  // --- MODEL LOADING & MANAGEMENT ---
+  // -------------------- HELPERS -------------------------
   Future<void> _loadModelFromAssets() async {
     _startLoading("Loading built-in model...");
     try {
-      const modelAssetPath = 'assets/models/yolo11m-pose_float32.tflite'; // Your model
+      const modelAssetPath = 'assets/models/yolo11m-pose_float32.tflite';
       final modelName = p.basenameWithoutExtension(modelAssetPath);
       final directory = await getApplicationDocumentsDirectory();
       final modelPath = p.join(directory.path, p.basename(modelAssetPath));
@@ -269,7 +221,6 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
   Future<void> _prepareAndLoadModel(Map<String, String> modelData) async {
     try {
       await _yoloModel?.dispose();
-      // FIX: Changed modelData['path'] to modelData['modelPath']
       _yoloModel = YOLO(modelPath: modelData['modelPath']!, task: YOLOTask.pose);
       await _yoloModel?.loadModel();
       if (mounted) {
@@ -280,27 +231,23 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
       _showSnackBar("Failed to load model: ${e.toString()}", isError: true);
       if (mounted) {
         setState(() {
-        _yoloModel = null;
-        _selectedModelName = null;
-      });
+          _yoloModel = null;
+          _selectedModelName = null;
+        });
       }
     }
   }
 
-  // --- CORE ANALYSIS LOGIC ---
   Future<void> _analyzeAndScoreExercise(Exercise exercise, File startImage, File endImage) async {
     if (_yoloModel == null) {
       _showSnackBar("Model is not loaded. Please restart the app.", isError: true);
       return;
     }
-    
-    // MODIFIED: Retrieve the selected side for the analysis
     final selectedSide = _exerciseData[exercise.title]?['side'] as BodySide?;
     if (selectedSide == null) {
       _showSnackBar("Could not determine body side. Please re-select.", isError: true);
       return;
     }
-
     _startLoading("Analyzing poses...");
     try {
       final startKeypoints = await _runInference(startImage);
@@ -309,20 +256,18 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
       if (startKeypoints == null || endKeypoints == null) {
         throw Exception("Could not detect a person in one or both images.");
       }
-      
-      // MODIFIED: Pass the selected side to the scoring function
       final results = exercise.scoringFunction(startKeypoints, endKeypoints, selectedSide);
-
-      setState(() {
-        final exerciseEntry = _exerciseData.putIfAbsent(exercise.title, () => {});
-        exerciseEntry['score'] = results['score'];
-        exerciseEntry['results'] = results['details'];
-        exerciseEntry['start_keypoints'] = _convertKeypointsToData(startKeypoints);
-        exerciseEntry['end_keypoints'] = _convertKeypointsToData(endKeypoints);
-        exerciseEntry['side'] = selectedSide; // Ensure side is saved
-      });
+      if (mounted) {
+        setState(() {
+          final exerciseEntry = _exerciseData.putIfAbsent(exercise.title, () => {});
+          exerciseEntry['score'] = results['score'];
+          exerciseEntry['results'] = results['details'];
+          exerciseEntry['start_keypoints'] = startKeypoints;
+          exerciseEntry['end_keypoints'] = endKeypoints;
+          exerciseEntry['side'] = selectedSide;
+        });
+      }
       _showSnackBar("${exercise.title} scored successfully!", isError: false);
-
     } catch (e) {
       _showSnackBar("Analysis Error: ${e.toString()}", isError: true);
     } finally {
@@ -331,29 +276,13 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
   }
   
   Future<List<Map<String, double>>?> _runInference(File imageFile) async {
-    // Read the image and run inference
     final imageBytes = await imageFile.readAsBytes();
     final detections = await _yoloModel!.predict(imageBytes);
-
-    print("Full results structure: $detections");
-    print("Results keys: ${detections.keys}");
-    // Debug: Print the raw detections
-    print('DEBUG: Raw YOLO detections: $detections');
-
     final allKeypoints = (detections['keypoints'] as List<dynamic>?) ?? [];
-    if (allKeypoints.isEmpty) {
-      print('DEBUG: No keypoints detected.');
-      return null;
-    }
-
-    // Get the keypoints for the first detected person
+    if (allKeypoints.isEmpty) return null;
     final personData = allKeypoints[0];
     final coordinates = personData['coordinates'] as List<dynamic>?;
-    if (coordinates == null) {
-      print('DEBUG: Keypoint coordinates are null.');
-      return null;
-    }
-
+    if (coordinates == null) return null;
     final List<Map<String, double>> parsedKeypoints = [];
     for (var i = 0; i < coordinates.length; i++) {
       var pointData = coordinates[i];
@@ -363,34 +292,20 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
         'confidence': (pointData['confidence'] as num).toDouble(),
       });
     }
-
-    // Debug: Print the number of parsed keypoints
-    print('DEBUG: Parsed ${parsedKeypoints.length} keypoints.');
-    
-    // Debug: Print the values of each parsed keypoint
-    for (var i = 0; i < parsedKeypoints.length; i++) {
-      final point = parsedKeypoints[i];
-      print('DEBUG: Keypoint $i (x: ${point['x']!.toStringAsFixed(2)}, y: ${point['y']!.toStringAsFixed(2)}, confidence: ${point['confidence']!.toStringAsFixed(2)})');
-    }
-
-    // Check if all 17 keypoints were detected
     return parsedKeypoints.length == 17 ? parsedKeypoints : null;
   }
 
-  // MODIFIED: Now also accepts and stores the selected body side
   void _onImageUploaded(String exerciseTitle, String imageType, File imageFile, BodySide side) {
     setState(() {
       final entry = _exerciseData.putIfAbsent(exerciseTitle, () => {});
       entry[imageType] = imageFile;
       entry['side'] = side;
     });
-    print('DEBUG: Saved side for $exerciseTitle is ${side.name}');
   }
 
   int get _currentScore {
     int score = 0;
     _exerciseData.forEach((_, data) {
-      // MODIFIED: Only increment the score if both start and end photos are present
       if (data.containsKey('start') && data.containsKey('end')) {
         score++;
       }
@@ -398,25 +313,10 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     return score;
   }
 
-List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints) {
-  if (keypoints == null) return null;
-  final List<KeypointData> keypointDataList = [];
-  for (var point in keypoints) {
-   if (point['x'] != null && point['y'] != null && point['confidence'] != null) {
-    keypointDataList.add(KeypointData(
-     Offset(point['x']!, point['y']!), 
-     point['confidence']!
-    ));
-   }
-  }
-  return keypointDataList.isNotEmpty ? keypointDataList : null;
-}
-
-   // --- UI BUILD METHODS ---
+  // --- UI BUILD METHODS ---
   @override
   Widget build(BuildContext context) {
     final int currentScore = _currentScore;
-    // MODIFIED: maxScore is now just the number of exercises
     final int maxScore = exercises.length;
     final bool allExercisesCompleted = _exerciseData.length == exercises.length && _exerciseData.values.every((data) => data.containsKey('score'));
 
@@ -507,7 +407,6 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
   }
 
   Widget _buildSubmitButton(BuildContext context) {
-    // ... (This widget's code is unchanged)
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       child: ElevatedButton(
@@ -523,7 +422,7 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
           );
         },
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.blue.shade100, // softer green
+          backgroundColor: Colors.blue.shade100,
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 60),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
@@ -541,19 +440,18 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
       elevation: 0,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      color:  Colors.blue.shade50, // light pastel blue,
+      color: Colors.blue.shade50,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Row(
           children: [
-            // Wrap the Column with an Expanded widget.
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Completion Progress", 
-                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade700)
+                    "Completion Progress",
+                    style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton(
@@ -561,18 +459,18 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
                         ? () => Navigator.push(context, MaterialPageRoute(builder: (context) => SubmittedPhotosScreen(exerciseData: _exerciseData)))
                         : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade200, foregroundColor: Colors.green.shade900, 
-                      elevation: 0, 
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), 
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)
+                      backgroundColor: Colors.green.shade200,
+                      foregroundColor: Colors.green.shade900,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     ),
                     child: Text("View Results", style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                  )
+                  ),
                 ],
               ),
             ),
-            // Use a SizedBox for consistent spacing instead of Spacers.
-            const SizedBox(width: 16), 
+            const SizedBox(width: 16),
             ScoreGauge(score: currentScore, maxScore: maxScore),
           ],
         ),
@@ -580,14 +478,22 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
     );
   }
 
-  void _startLoading(String message) => setState(() { _isLoading = true; _loadingMessage = message; });
-  void _stopLoading() => setState(() { _isLoading = false; _loadingMessage = null; });
+  void _startLoading(String message) => setState(() {
+        _isLoading = true;
+        _loadingMessage = message;
+      });
+  void _stopLoading() => setState(() {
+        _isLoading = false;
+        _loadingMessage = null;
+      });
   void _showSnackBar(String message, {required bool isError}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)..hideCurrentSnackBar()..showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: isError ? Theme.of(context).colorScheme.error : Colors.green.shade700,
-    ));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : Colors.green.shade700,
+      ));
   }
 }
 
@@ -597,14 +503,14 @@ class _ExerciseTile extends StatelessWidget {
   final String subtitle;
   final bool isCompleted;
   final VoidCallback onTap;
-  final String imageAssetPath; // CHANGED: Now a String for the image path
+  final String imageAssetPath;
 
   const _ExerciseTile({
     required this.title,
     required this.subtitle,
     required this.isCompleted,
     required this.onTap,
-    required this.imageAssetPath, // CHANGED: Add to the constructor
+    required this.imageAssetPath,
   });
 
   @override
@@ -629,7 +535,6 @@ class _ExerciseTile extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
-              // MODIFIED: Use Image.asset instead of Icon
               Container(
                 width: 50,
                 height: 50,
@@ -637,13 +542,12 @@ class _ExerciseTile extends StatelessWidget {
                   color: isCompleted ? accentColor.withOpacity(0.2) : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Padding( // Add padding if the image is too close to the edge
-                  padding: const EdgeInsets.all(4.0), // Adjust padding as needed
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
                   child: Image.asset(
-                    imageAssetPath, // Use the new imageAssetPath parameter
-                    color: isCompleted ? accentColor : Colors.black, // Apply color tint if desired
-                    // Consider BoxFit.contain or BoxFit.cover based on your image aspect ratio and desired look
-                    fit: BoxFit.contain, 
+                    imageAssetPath,
+                    color: isCompleted ? accentColor : Colors.black,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
@@ -654,13 +558,11 @@ class _ExerciseTile extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.poppins(
-                          fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
+                      style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                     ),
                     Text(
                       subtitle,
-                      style: GoogleFonts.poppins(
-                          fontSize: 14, color: Colors.grey.shade600),
+                      style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey.shade600),
                     ),
                   ],
                 ),
@@ -671,7 +573,7 @@ class _ExerciseTile extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isCompleted ? accentColor.withOpacity(0.5) : Colors.grey.shade300,
-                    width: 1.5
+                    width: 1.5,
                   ),
                 ),
                 child: CircleAvatar(
@@ -692,7 +594,7 @@ class _ExerciseTile extends StatelessWidget {
   }
 }
 
-/// A widget that stacks the CustomPainter and the score text. (Unchanged)
+/// A widget that stacks the CustomPainter and the score text.
 class ScoreGauge extends StatelessWidget {
   final int score;
   final int maxScore;
@@ -711,7 +613,6 @@ class ScoreGauge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Use provided colors/styles or fall back to default values.
     final pColor = progressColor ?? Colors.green.shade700;
     final bgColor = backgroundColor ?? Colors.grey.shade300;
 
@@ -731,7 +632,6 @@ class ScoreGauge extends StatelessWidget {
               strokeWidth: strokeWidth ?? 12,
             ),
           ),
-          // MODIFIED: This is the core change. Display a rich text score.
           Text.rich(
             TextSpan(
               children: [
@@ -740,7 +640,7 @@ class ScoreGauge extends StatelessWidget {
                   style: GoogleFonts.poppins(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
-                    color: pColor, // Use the progress color for the score text
+                    color: pColor,
                   ),
                 ),
                 TextSpan(
@@ -748,7 +648,7 @@ class ScoreGauge extends StatelessWidget {
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: bgColor.withOpacity(0.9), // Use the background color for the max score text
+                    color: bgColor.withOpacity(0.9),
                   ),
                 ),
               ],
@@ -761,7 +661,6 @@ class ScoreGauge extends StatelessWidget {
   }
 }
 
-/// This CustomPainter is the "brain" of the gauge. It handles all the drawing. (Unchanged)
 class ScoreGaugePainter extends CustomPainter {
   final int score;
   final int maxScore;
@@ -795,12 +694,11 @@ class ScoreGaugePainter extends CustomPainter {
     final radius = (size.width - strokeWidth) / 2;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    const startAngle = -2.35; 
+    const startAngle = -2.35;
     const sweepAngle = 4.7;
 
     canvas.drawArc(rect, startAngle, sweepAngle, false, backgroundPaint);
 
-    // FIX: Ensure progress is never greater than 1.0 to avoid overdrawing
     final progress = (score / maxScore).clamp(0.0, 1.0);
     final progressSweepAngle = progress * sweepAngle;
     canvas.drawArc(rect, startAngle, progressSweepAngle, false, progressPaint);
@@ -808,13 +706,6 @@ class ScoreGaugePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return true; 
+    return true;
   }
-}
-
-  // New data class to hold keypoint and confidence
-class KeypointData {
-  final Offset offset;
-  final double confidence;
-  KeypointData(this.offset, this.confidence);
 }

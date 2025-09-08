@@ -1,23 +1,41 @@
-// submitted_photos_screen.dart
-
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' as ui; // Import with a prefix to avoid conflicts
+import 'dart:ui' as ui; 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:yolo_detect/therapy_home_screen.dart';
 import 'body_side.dart';
 import 'dart:math' as math;
 
-// --- TOP-LEVEL CONSTANTS AND HELPER FUNCTIONS ---
-/// Determines which keypoint indices are relevant for the visual overlay.
+// New data class to hold keypoint and confidence
+class KeypointData {
+  final Offset offset;
+  final double confidence;
+  KeypointData(this.offset, this.confidence);
+}
+
+// Helper function to convert raw data to KeypointData objects
+List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints) {
+  if (keypoints == null) return null;
+  final List<KeypointData> keypointDataList = [];
+  for (var point in keypoints) {
+    if (point['x'] != null && point['y'] != null && point['confidence'] != null) {
+      keypointDataList.add(KeypointData(
+          Offset(point['x']!, point['y']!),
+          point['confidence']!
+      ));
+    }
+  }
+  return keypointDataList.isNotEmpty ? keypointDataList : null;
+}
+
+// --- For Calculations  ---
 List<int> getRelevantKeypointIndices(String exerciseTitle, BodySide side) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
-    case 'Shoulder Flexion 0°-90°': // FIXED: Corrected title here to match the image
+    case 'Shoulder Flexion 0°-90°':
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
-    case 'Shoulder Flexion 90°-180°': // FIXED: Corrected title here to match the image
+    case 'Shoulder Flexion 90°-180°':
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
     case 'Hand to Lumbar Spine':
       return side == BodySide.left ? [5, 7, 9] : [6, 8, 10];
@@ -26,7 +44,6 @@ List<int> getRelevantKeypointIndices(String exerciseTitle, BodySide side) {
   }
 }
 
-/// Calculates the angle between three points.
 double _calculateAngle(KeypointData p1, KeypointData p2, KeypointData p3) {
   if (p1.confidence < 0.3 || p2.confidence < 0.3 || p3.confidence < 0.3) return 0.0;
   
@@ -39,7 +56,6 @@ double _calculateAngle(KeypointData p1, KeypointData p2, KeypointData p3) {
   return angle;
 }
 
-/// Returns the keypoint indices needed for an angle calculation [p1, vertex, p3].
 List<int>? _getAngleKeypointIndices(String exerciseTitle, BodySide side) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
@@ -55,7 +71,6 @@ List<int>? _getAngleKeypointIndices(String exerciseTitle, BodySide side) {
   }
 }
 
-/// Returns the target goal for a given exercise.
 String _getMovementGoal(String exerciseTitle) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
@@ -71,21 +86,17 @@ String _getMovementGoal(String exerciseTitle) {
   }
 }
 
-
 // --- WIDGETS ---
-
 class SubmittedPhotosScreen extends StatelessWidget {
   final Map<String, Map<String, dynamic>> exerciseData;
 
   const SubmittedPhotosScreen({super.key, required this.exerciseData});
-  
-  // NOTE: The helper functions have been moved outside this class.
 
   @override
   Widget build(BuildContext context) {
     final exercisesWithPhotos = exerciseData.entries
-      .where((e) => e.value.containsKey('start') || e.value.containsKey('end'))
-      .toList();
+        .where((e) => e.value.containsKey('start') || e.value.containsKey('end'))
+        .toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -102,8 +113,15 @@ class SubmittedPhotosScreen extends StatelessWidget {
           final endImage = data['end'] as File?;
           final score = data['score'] as int?;
           final results = data['results'] as String?;
-          final startKeypoints = data['start_keypoints'] as List<KeypointData>?;
-          final endKeypoints = data['end_keypoints'] as List<KeypointData>?;
+
+          // Correct the type cast here
+          final rawStartKeypoints = data['start_keypoints'] as List<Map<String, double>>?;
+          final rawEndKeypoints = data['end_keypoints'] as List<Map<String, double>>?;
+
+          // Convert to KeypointData before passing to widgets
+          final startKeypoints = _convertKeypointsToData(rawStartKeypoints);
+          final endKeypoints = _convertKeypointsToData(rawEndKeypoints);
+
           final side = data['side'] as BodySide?;
 
           return Card(
@@ -150,7 +168,7 @@ class SubmittedPhotosScreen extends StatelessWidget {
                       _PhotoDisplay(label: "END", imageFile: endImage, keypoints: endKeypoints, exerciseTitle: exerciseTitle, side: side),
                     ],
                   ),
-                   const SizedBox(height: 20),
+                  const SizedBox(height: 20),
                   _KeyMetricsCard(
                     exerciseTitle: exerciseTitle,
                     side: side,
@@ -167,7 +185,6 @@ class SubmittedPhotosScreen extends StatelessWidget {
   }
 }
 
-/// A card that displays the key performance metrics of an exercise.
 class _KeyMetricsCard extends StatelessWidget {
   final String exerciseTitle;
   final BodySide? side;
@@ -186,11 +203,9 @@ class _KeyMetricsCard extends StatelessWidget {
     if (startKeypoints == null || endKeypoints == null || side == null) {
       return const SizedBox.shrink();
     }
-
     final indices = _getAngleKeypointIndices(exerciseTitle, side!);
     if (indices == null) return const SizedBox.shrink();
-
-    // FIXED: Corrected the typo here (_calculateAngl -> _calculateAngle)
+    
     final startAngle = _calculateAngle(startKeypoints![indices[0]], startKeypoints![indices[1]], startKeypoints![indices[2]]);
     final endAngle = _calculateAngle(endKeypoints![indices[0]], endKeypoints![indices[1]], endKeypoints![indices[2]]);
     final rangeOfMotion = (endAngle - startAngle).abs();
@@ -227,7 +242,6 @@ class _KeyMetricsCard extends StatelessWidget {
   }
 }
 
-/// A helper widget for displaying a single metric row.
 class _MetricRow extends StatelessWidget {
   final String label;
   final String value;
@@ -237,16 +251,13 @@ class _MetricRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      // The `mainAxisAlignment` is no longer needed as Expanded handles the layout.
       children: [
-        // Wrap the label with Expanded.
         Expanded(
           child: Text(
             label,
             style: GoogleFonts.poppins(fontSize: 15, color: Colors.black54),
           ),
         ),
-        // The value stays the same.
         Text(
           value,
           style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
@@ -271,7 +282,6 @@ class _PhotoDisplay extends StatelessWidget {
     this.side,
   });
 
-  // NEW: A helper function to get the image dimensions
   Future<ui.Image> _loadImage(File imageFile) async {
     final bytes = await imageFile.readAsBytes();
     final completer = Completer<ui.Image>();
@@ -297,7 +307,7 @@ class _PhotoDisplay extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: imageFile != null
-                    ? FutureBuilder<ui.Image>( // NEW: Use FutureBuilder to get image size
+                    ? FutureBuilder<ui.Image>(
                         future: _loadImage(imageFile!),
                         builder: (context, snapshot) {
                           if (snapshot.connectionState != ConnectionState.done || !snapshot.hasData) {
@@ -309,17 +319,14 @@ class _PhotoDisplay extends StatelessWidget {
                           return Stack(
                             fit: StackFit.expand,
                             children: [
-                              // The image itself
                               Image.file(imageFile!, fit: BoxFit.cover),
-                              
                               if (keypoints != null && keypoints!.isNotEmpty)
                                 LayoutBuilder(builder: (context, constraints) {
-                                  // Pass the original size to the painter
                                   return CustomPaint(
                                     painter: KeypointPainter(
                                       keypoints: keypoints!,
-                                      originalImageSize: originalSize, // NEW: Pass the correct size
-                                      displaySize: Size(constraints.maxWidth, constraints.maxHeight), // NEW: Pass the widget's size
+                                      originalImageSize: originalSize,
+                                      displaySize: Size(constraints.maxWidth, constraints.maxHeight),
                                       highlightIndices: getRelevantKeypointIndices(exerciseTitle, side ?? BodySide.right),
                                     ),
                                   );
@@ -340,8 +347,8 @@ class _PhotoDisplay extends StatelessWidget {
 
 class KeypointPainter extends CustomPainter {
   final List<KeypointData> keypoints;
-  final Size originalImageSize; // NEW: The size of the original image
-  final Size displaySize; // NEW: The size of the widget on screen
+  final Size originalImageSize;
+  final Size displaySize;
   final List<int> highlightIndices;
 
   KeypointPainter({
@@ -362,11 +369,9 @@ class KeypointPainter extends CustomPainter {
       ..color = Colors.yellow
       ..strokeWidth = 4.0;
 
-    // Calculate scaling factors
     final double scaleX = displaySize.width / originalImageSize.width;
     final double scaleY = displaySize.height / originalImageSize.height;
 
-    // Helper function to scale a keypoint
     Offset _getScaledOffset(KeypointData kp) {
       return Offset(
         kp.offset.dx * originalImageSize.width * scaleX,
@@ -374,9 +379,6 @@ class KeypointPainter extends CustomPainter {
       );
     }
     
-    // ... (rest of the paint method, using the new scaled offsets)
-
-    // --- Draw Angle Lines ---
     if (highlightIndices.length == 3) {
       final p1Index = highlightIndices[0];
       final vertexIndex = highlightIndices[1];
@@ -388,7 +390,6 @@ class KeypointPainter extends CustomPainter {
         final p3 = keypoints[p3Index];
 
         if (p1.confidence > 0.3 && vertex.confidence > 0.3 && p3.confidence > 0.3) {
-          // Use the new scaling logic
           final scaledP1 = _getScaledOffset(p1);
           final scaledVertex = _getScaledOffset(vertex);
           final scaledP3 = _getScaledOffset(p3);
@@ -399,13 +400,11 @@ class KeypointPainter extends CustomPainter {
       }
     }
 
-    // --- Draw Highlighted Keypoints ---
     for (final index in highlightIndices) {
       if (keypoints.length > index) {
         final kp = keypoints[index];
         if (kp.confidence < 0.3) continue;
         
-        // Use the new scaling logic
         final scaledOffset = _getScaledOffset(kp);
         canvas.drawPoints(ui.PointMode.points, [scaledOffset], highlightPointPaint);
       }

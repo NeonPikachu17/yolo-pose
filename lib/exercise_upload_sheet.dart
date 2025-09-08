@@ -43,28 +43,22 @@ class _ExerciseUploadSheetState extends State<ExerciseUploadSheet> {
     }
   }
 
+  // For image normalization
   Future<File> _normalizeImageOrientation(String imagePath) async {
-    // Read the original image file as bytes
     final imageBytes = await File(imagePath).readAsBytes();
 
-    // Decode the image using the 'image' package
     final originalImage = img.decodeImage(imageBytes);
 
-    // If the image can't be decoded, return the original file
     if (originalImage == null) {
       return File(imagePath);
     }
 
-    // The magic happens here: bakeOrientation reads the EXIF orientation
-    // and applies the necessary rotation/flipping to the image pixels.
     final fixedImage = img.bakeOrientation(originalImage);
 
-    // Get a temporary directory to save the new file
     final directory = await getTemporaryDirectory();
     final newPath = p.join(directory.path, '${DateTime.now().millisecondsSinceEpoch}.jpg');
     final newFile = File(newPath);
 
-    // Encode the fixed image to JPEG format and write it to the new file
     await newFile.writeAsBytes(img.encodeJpg(fixedImage));
 
     return newFile;
@@ -74,8 +68,6 @@ class _ExerciseUploadSheetState extends State<ExerciseUploadSheet> {
   Widget build(BuildContext context) {
     final canAnalyze = _startImage != null && _endImage != null;
 
-    // MODIFIED: Wrapped the content in a Container to provide the background
-    // and rounded corners for the sheet.
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
