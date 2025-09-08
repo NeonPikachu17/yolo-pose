@@ -27,12 +27,12 @@ class ResultsSummaryScreen extends StatelessWidget {
     final int maxScore = totalExercises * 2;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1C1C1E),
+      backgroundColor: Colors.blue.shade50, // Changed to light blue background
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.black), // Changed icon color for contrast
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -41,21 +41,21 @@ class ResultsSummaryScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Hello", style: GoogleFonts.poppins(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text("This is your FMA-UE score.", style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey.shade400)),
+            Text("Hello", style: GoogleFonts.poppins(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.black)), // Changed text color for contrast
+            Text("This is your FMA-UE score.", style: GoogleFonts.poppins(fontSize: 18, color: Colors.grey.shade700)), // Changed text color for contrast
             const SizedBox(height: 32),
             Center(
               // The gauge correctly receives the total and max scores.
               child: ScoreGauge(
                 score: totalScore,
                 maxScore: maxScore,
-                progressColor: Colors.white,
-                backgroundColor: Colors.grey.shade800,
+                progressColor: Colors.blue.shade700, // Adjusted progress color for light background
+                backgroundColor: Colors.blue.shade200, // Adjusted background color for light background
                 strokeWidth: 16,
               ),
             ),
             const SizedBox(height: 48),
-            Text("SUMMARY", style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade500)),
+            Text("SUMMARY", style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade700)), // Changed text color for contrast
             const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
@@ -104,7 +104,7 @@ class _SummaryTile extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 6.0),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.grey.shade800,
+          color: Colors.blue.shade100, // Changed tile background to a slightly darker light blue
           borderRadius: BorderRadius.circular(28),
         ),
         child: Row(
@@ -114,17 +114,17 @@ class _SummaryTile extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
+                style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black), // Changed text color for contrast
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             const SizedBox(width: 16), // Add spacing
             CircleAvatar(
               radius: 16,
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.blue.shade700, // Changed avatar background for contrast
               child: Text(
                 score.toString(),
-                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.black),
+                style: GoogleFonts.poppins(fontWeight: FontWeight.bold, color: Colors.white), // Changed text color for contrast
               ),
             ),
           ],

@@ -390,7 +390,10 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
   int get _currentScore {
     int score = 0;
     _exerciseData.forEach((_, data) {
-      score += data.values.whereType<File>().length;
+      // MODIFIED: Only increment the score if both start and end photos are present
+      if (data.containsKey('start') && data.containsKey('end')) {
+        score++;
+      }
     });
     return score;
   }
@@ -409,17 +412,18 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
   return keypointDataList.isNotEmpty ? keypointDataList : null;
 }
 
-  // --- UI BUILD METHODS ---
+   // --- UI BUILD METHODS ---
   @override
   Widget build(BuildContext context) {
     final int currentScore = _currentScore;
-    final int maxScore = exercises.length * 2;
+    // MODIFIED: maxScore is now just the number of exercises
+    final int maxScore = exercises.length;
     final bool allExercisesCompleted = _exerciseData.length == exercises.length && _exerciseData.values.every((data) => data.containsKey('score'));
 
     return Scaffold(
       backgroundColor: Color.fromARGB(255, 255, 255, 255),
       appBar: AppBar(
-        backgroundColor: Colors.blue.shade100, // light blue appbar
+        backgroundColor: Colors.blue.shade100,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24.0),
           child: Padding(
@@ -436,14 +440,14 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
       ),
       bottomNavigationBar: allExercisesCompleted ? _buildSubmitButton(context) : null,
       body: _isLoading
-        ? Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 20),
-              Text(_loadingMessage ?? "Loading...", style: Theme.of(context).textTheme.bodyLarge),
-            ]),
-          )
-        : ListView(
+          ? Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 20),
+                Text(_loadingMessage ?? "Loading...", style: Theme.of(context).textTheme.bodyLarge),
+              ]),
+            )
+          : ListView(
               padding: const EdgeInsets.all(24.0),
               children: [
                 _buildScoreCard(currentScore, maxScore),
@@ -452,7 +456,6 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
                   final data = _exerciseData[exercise.title];
                   final isCompleted = (data?['score'] as int?) != null;
 
-                  // NEW: Determine the image asset path based on the exercise title
                   String imagePath;
                   switch (exercise.title) {
                     case "Shoulder Abduction":
@@ -468,7 +471,7 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
                       imagePath = 'assets/images/ShoulderFlexion90-180.png';
                       break;
                     default:
-                      imagePath = 'assets/images/default_exercise.png'; // Provide a default image if needed
+                      imagePath = 'assets/images/default_exercise.png';
                   }
 
                   return _ExerciseTile(
@@ -495,7 +498,7 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
                         }
                       }
                     },
-                    imageAssetPath: imagePath, // CHANGED: Pass the image path here
+                    imageAssetPath: imagePath,
                   );
                 }),
               ],
@@ -693,7 +696,6 @@ class _ExerciseTile extends StatelessWidget {
 class ScoreGauge extends StatelessWidget {
   final int score;
   final int maxScore;
-  // NEW: Added optional parameters to allow for different styling.
   final Color? progressColor;
   final Color? backgroundColor;
   final double? strokeWidth;
@@ -702,7 +704,6 @@ class ScoreGauge extends StatelessWidget {
     super.key,
     required this.score,
     required this.maxScore,
-    // Initialize the new optional parameters in the constructor.
     this.progressColor,
     this.backgroundColor,
     this.strokeWidth,
@@ -730,6 +731,7 @@ class ScoreGauge extends StatelessWidget {
               strokeWidth: strokeWidth ?? 12,
             ),
           ),
+          // MODIFIED: This is the core change. Display a rich text score.
           Text.rich(
             TextSpan(
               children: [

@@ -44,9 +44,9 @@ List<int>? _getAngleKeypointIndices(String exerciseTitle, BodySide side) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
-    case 'Shoulder Flexion 0-90':
+    case 'Shoulder Flexion 0°-90°':
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
-    case 'Shoulder Flexion 90-180':
+    case 'Shoulder Flexion 90°-180°':
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
     case 'Hand to Lumbar Spine':
       return side == BodySide.left ? [5, 7, 9] : [6, 8, 10];
@@ -59,9 +59,10 @@ List<int>? _getAngleKeypointIndices(String exerciseTitle, BodySide side) {
 String _getMovementGoal(String exerciseTitle) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
-    case 'Shoulder Flexion 0-90':
       return "90.0°";
-    case 'Shoulder Flexion 90-180':
+    case 'Shoulder Flexion 0°-90°':
+      return "90.0°";
+    case 'Shoulder Flexion 90°-180°':
       return "170.0°";
     case 'Hand to Lumbar Spine':
       return "<= 70.0°";
