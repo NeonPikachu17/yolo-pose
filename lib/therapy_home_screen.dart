@@ -444,42 +444,62 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
             ]),
           )
         : ListView(
-            padding: const EdgeInsets.all(24.0),
-            children: [
-              _buildScoreCard(currentScore, maxScore),
-              const SizedBox(height: 40),
-              ...exercises.map((exercise) {
-                final data = _exerciseData[exercise.title];
-                final isCompleted = (data?['score'] as int?) != null;
-                
-                return _ExerciseTile(
-                  title: exercise.title,
-                  subtitle: exercise.subtitle,
-                  isCompleted: isCompleted,
-                  onTap: () async {
-                    final bool? shouldAnalyze = await showModalBottomSheet<bool>(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (ctx) => ExerciseUploadSheet(
-                        exercise: exercise,
-                        onImageUploaded: _onImageUploaded,
-                      ),
-                    );
+              padding: const EdgeInsets.all(24.0),
+              children: [
+                _buildScoreCard(currentScore, maxScore),
+                const SizedBox(height: 40),
+                ...exercises.map((exercise) {
+                  final data = _exerciseData[exercise.title];
+                  final isCompleted = (data?['score'] as int?) != null;
 
-                    if (shouldAnalyze == true) {
-                      final startImg = _exerciseData[exercise.title]?['start'] as File?;
-                      final endImg = _exerciseData[exercise.title]?['end'] as File?;
+                  // NEW: Determine the image asset path based on the exercise title
+                  String imagePath;
+                  switch (exercise.title) {
+                    case "Shoulder Abduction":
+                      imagePath = 'assets/images/ShoulderAbduction.png';
+                      break;
+                    case "Hand to Lumbar Spine":
+                      imagePath = 'assets/images/HandtoLumbarSpine.png';
+                      break;
+                    case "Shoulder Flexion 0°-90°":
+                      imagePath = 'assets/images/ShoulderFlexion0-90.png';
+                      break;
+                    case "Shoulder Flexion 90°-180°":
+                      imagePath = 'assets/images/ShoulderFlexion90-180.png';
+                      break;
+                    default:
+                      imagePath = 'assets/images/default_exercise.png'; // Provide a default image if needed
+                  }
 
-                      if (startImg != null && endImg != null) {
-                        await _analyzeAndScoreExercise(exercise, startImg, endImg);
+                  return _ExerciseTile(
+                    title: exercise.title,
+                    subtitle: exercise.subtitle,
+                    isCompleted: isCompleted,
+                    onTap: () async {
+                      final bool? shouldAnalyze = await showModalBottomSheet<bool>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (ctx) => ExerciseUploadSheet(
+                          exercise: exercise,
+                          onImageUploaded: _onImageUploaded,
+                        ),
+                      );
+
+                      if (shouldAnalyze == true) {
+                        final startImg = _exerciseData[exercise.title]?['start'] as File?;
+                        final endImg = _exerciseData[exercise.title]?['end'] as File?;
+
+                        if (startImg != null && endImg != null) {
+                          await _analyzeAndScoreExercise(exercise, startImg, endImg);
+                        }
                       }
-                    }
-                  },
-                );
-              }),
-            ],
-          ),
+                    },
+                    imageAssetPath: imagePath, // CHANGED: Pass the image path here
+                  );
+                }),
+              ],
+            ),
     );
   }
 
@@ -500,7 +520,7 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
           );
         },
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green.shade400, // softer green
+          backgroundColor: Colors.blue.shade100, // softer green
           foregroundColor: Colors.white,
           minimumSize: const Size(double.infinity, 60),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
@@ -572,25 +592,25 @@ List<KeypointData>? _convertKeypointsToData(List<Map<String, double>>? keypoints
 class _ExerciseTile extends StatelessWidget {
   final String title;
   final String subtitle;
-  final bool isCompleted; // NEW: To know its current state
-  final VoidCallback onTap; // NEW: To handle taps
+  final bool isCompleted;
+  final VoidCallback onTap;
+  final String imageAssetPath; // CHANGED: Now a String for the image path
 
   const _ExerciseTile({
     required this.title,
     required this.subtitle,
     required this.isCompleted,
     required this.onTap,
+    required this.imageAssetPath, // CHANGED: Add to the constructor
   });
 
   @override
   Widget build(BuildContext context) {
-    // NEW: Use green as an accent color for completed items
     final Color accentColor = isCompleted ? Colors.green.shade600 : Colors.black;
 
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 8),
-      // CHANGED: Style the card differently if it's completed
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: BorderSide(
@@ -599,7 +619,6 @@ class _ExerciseTile extends StatelessWidget {
         ),
       ),
       color: isCompleted ? Colors.green.withOpacity(0.05) : Colors.white,
-      // NEW: Wrap with InkWell to make it tappable
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
@@ -607,12 +626,22 @@ class _ExerciseTile extends StatelessWidget {
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
+              // MODIFIED: Use Image.asset instead of Icon
               Container(
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
                   color: isCompleted ? accentColor.withOpacity(0.2) : Colors.grey.shade300,
                   borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding( // Add padding if the image is too close to the edge
+                  padding: const EdgeInsets.all(4.0), // Adjust padding as needed
+                  child: Image.asset(
+                    imageAssetPath, // Use the new imageAssetPath parameter
+                    color: isCompleted ? accentColor : Colors.black, // Apply color tint if desired
+                    // Consider BoxFit.contain or BoxFit.cover based on your image aspect ratio and desired look
+                    fit: BoxFit.contain, 
+                  ),
                 ),
               ),
               const SizedBox(width: 16),
@@ -634,7 +663,6 @@ class _ExerciseTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // CHANGED: Show a checkmark icon if completed, otherwise show an arrow
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,

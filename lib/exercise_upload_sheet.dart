@@ -135,7 +135,7 @@ class _ExerciseUploadSheetState extends State<ExerciseUploadSheet> {
             ElevatedButton(
               onPressed: canAnalyze ? () => Navigator.of(context).pop(true) : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
+                backgroundColor: Colors.blue.shade100,
                 foregroundColor: Colors.white,
                 minimumSize: const Size(double.infinity, 60),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),

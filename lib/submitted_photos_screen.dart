@@ -1,30 +1,23 @@
 // submitted_photos_screen.dart
 
+import 'dart:async';
 import 'dart:io';
-import 'dart:ui';
+import 'dart:ui' as ui; // Import with a prefix to avoid conflicts
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:yolo_detect/therapy_home_screen.dart'; // Ensure this path is correct
+import 'package:yolo_detect/therapy_home_screen.dart';
 import 'body_side.dart';
 import 'dart:math' as math;
 
 // --- TOP-LEVEL CONSTANTS AND HELPER FUNCTIONS ---
-
-const List<List<int>> _cocoSkeletonConnections = [
-  [0, 1], [0, 2], [1, 3], [2, 4],     // Face
-  [5, 6], [5, 7], [7, 9], [6, 8], [8, 10], // Arms
-  [5, 11], [6, 12],                    // Torso to Shoulders
-  [11, 12],                           // Shoulder to Shoulder
-  [11, 13], [13, 15],                  // Left Leg
-  [12, 14], [14, 16]                   // Right Leg
-];
-
 /// Determines which keypoint indices are relevant for the visual overlay.
 List<int> getRelevantKeypointIndices(String exerciseTitle, BodySide side) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
-    case 'Shoulder Flexion 0-90':
-    case 'Shoulder Flexion 90-180':
+      return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
+    case 'Shoulder Flexion 0°-90°': // FIXED: Corrected title here to match the image
+      return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
+    case 'Shoulder Flexion 90°-180°': // FIXED: Corrected title here to match the image
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
     case 'Hand to Lumbar Spine':
       return side == BodySide.left ? [5, 7, 9] : [6, 8, 10];
@@ -50,7 +43,9 @@ double _calculateAngle(KeypointData p1, KeypointData p2, KeypointData p3) {
 List<int>? _getAngleKeypointIndices(String exerciseTitle, BodySide side) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
+      return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
     case 'Shoulder Flexion 0-90':
+      return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
     case 'Shoulder Flexion 90-180':
       return side == BodySide.left ? [11, 5, 7] : [12, 6, 8];
     case 'Hand to Lumbar Spine':
@@ -261,7 +256,6 @@ class _MetricRow extends StatelessWidget {
 }
 
 class _PhotoDisplay extends StatelessWidget {
-  // ... (This widget's code is unchanged)
   final String label;
   final File? imageFile;
   final List<KeypointData>? keypoints;
@@ -275,6 +269,14 @@ class _PhotoDisplay extends StatelessWidget {
     required this.exerciseTitle,
     this.side,
   });
+
+  // NEW: A helper function to get the image dimensions
+  Future<ui.Image> _loadImage(File imageFile) async {
+    final bytes = await imageFile.readAsBytes();
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromList(bytes, completer.complete);
+    return completer.future;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -294,25 +296,36 @@ class _PhotoDisplay extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: imageFile != null
-                    ? Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.file(imageFile!, fit: BoxFit.cover),
-                          if (keypoints != null && keypoints!.isNotEmpty)
-                            LayoutBuilder(builder: (context, constraints) {
-                              final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+                    ? FutureBuilder<ui.Image>( // NEW: Use FutureBuilder to get image size
+                        future: _loadImage(imageFile!),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState != ConnectionState.done || !snapshot.hasData) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final originalImage = snapshot.data!;
+                          final originalSize = Size(originalImage.width.toDouble(), originalImage.height.toDouble());
+                          
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // The image itself
+                              Image.file(imageFile!, fit: BoxFit.cover),
                               
-                              final relevantIndices = getRelevantKeypointIndices(exerciseTitle, side ?? BodySide.right);
-
-                              return CustomPaint(
-                                painter: KeypointPainter(
-                                  keypoints: keypoints!,
-                                  imageSize: imageSize,
-                                  highlightIndices: relevantIndices,
-                                ),
-                              );
-                            }),
-                        ],
+                              if (keypoints != null && keypoints!.isNotEmpty)
+                                LayoutBuilder(builder: (context, constraints) {
+                                  // Pass the original size to the painter
+                                  return CustomPaint(
+                                    painter: KeypointPainter(
+                                      keypoints: keypoints!,
+                                      originalImageSize: originalSize, // NEW: Pass the correct size
+                                      displaySize: Size(constraints.maxWidth, constraints.maxHeight), // NEW: Pass the widget's size
+                                      highlightIndices: getRelevantKeypointIndices(exerciseTitle, side ?? BodySide.right),
+                                    ),
+                                  );
+                                }),
+                            ],
+                          );
+                        },
                       )
                     : const Center(child: Icon(Icons.image_not_supported_outlined, color: Colors.grey)),
               ),
@@ -326,12 +339,14 @@ class _PhotoDisplay extends StatelessWidget {
 
 class KeypointPainter extends CustomPainter {
   final List<KeypointData> keypoints;
-  final Size imageSize;
+  final Size originalImageSize; // NEW: The size of the original image
+  final Size displaySize; // NEW: The size of the widget on screen
   final List<int> highlightIndices;
 
   KeypointPainter({
     required this.keypoints,
-    required this.imageSize,
+    required this.originalImageSize,
+    required this.displaySize,
     required this.highlightIndices,
   });
 
@@ -342,31 +357,41 @@ class KeypointPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeWidth = 10.0;
 
-    // A new paint for the lines that form the angle
     final angleLinePaint = Paint()
       ..color = Colors.yellow
       ..strokeWidth = 4.0;
 
+    // Calculate scaling factors
+    final double scaleX = displaySize.width / originalImageSize.width;
+    final double scaleY = displaySize.height / originalImageSize.height;
+
+    // Helper function to scale a keypoint
+    Offset _getScaledOffset(KeypointData kp) {
+      return Offset(
+        kp.offset.dx * originalImageSize.width * scaleX,
+        kp.offset.dy * originalImageSize.height * scaleY,
+      );
+    }
+    
+    // ... (rest of the paint method, using the new scaled offsets)
+
     // --- Draw Angle Lines ---
-    // First, check if we have the three specific points needed to form an angle.
     if (highlightIndices.length == 3) {
       final p1Index = highlightIndices[0];
       final vertexIndex = highlightIndices[1];
       final p3Index = highlightIndices[2];
 
-      // Ensure all indices are valid for the keypoints list.
       if (keypoints.length > p1Index && keypoints.length > vertexIndex && keypoints.length > p3Index) {
         final p1 = keypoints[p1Index];
         final vertex = keypoints[vertexIndex];
         final p3 = keypoints[p3Index];
 
-        // Check confidence before drawing the lines.
         if (p1.confidence > 0.3 && vertex.confidence > 0.3 && p3.confidence > 0.3) {
-          final scaledP1 = Offset(p1.offset.dx * size.width, p1.offset.dy * size.height);
-          final scaledVertex = Offset(vertex.offset.dx * size.width, vertex.offset.dy * size.height);
-          final scaledP3 = Offset(p3.offset.dx * size.width, p3.offset.dy * size.height);
+          // Use the new scaling logic
+          final scaledP1 = _getScaledOffset(p1);
+          final scaledVertex = _getScaledOffset(vertex);
+          final scaledP3 = _getScaledOffset(p3);
 
-          // Draw the two lines that form the angle with the vertex in the middle.
           canvas.drawLine(scaledP1, scaledVertex, angleLinePaint);
           canvas.drawLine(scaledVertex, scaledP3, angleLinePaint);
         }
@@ -374,20 +399,20 @@ class KeypointPainter extends CustomPainter {
     }
 
     // --- Draw Highlighted Keypoints ---
-    // Draw the yellow dots on top of the lines for better visibility.
     for (final index in highlightIndices) {
       if (keypoints.length > index) {
         final kp = keypoints[index];
         if (kp.confidence < 0.3) continue;
-
-        final scaledOffset = Offset(kp.offset.dx * size.width, kp.offset.dy * size.height);
-        canvas.drawPoints(PointMode.points, [scaledOffset], highlightPointPaint);
+        
+        // Use the new scaling logic
+        final scaledOffset = _getScaledOffset(kp);
+        canvas.drawPoints(ui.PointMode.points, [scaledOffset], highlightPointPaint);
       }
     }
   }
 
   @override
   bool shouldRepaint(covariant KeypointPainter oldDelegate) {
-    return oldDelegate.keypoints != keypoints || oldDelegate.imageSize != imageSize || oldDelegate.highlightIndices != highlightIndices;
+    return oldDelegate.keypoints != keypoints || oldDelegate.originalImageSize != originalImageSize || oldDelegate.highlightIndices != highlightIndices;
   }
 }

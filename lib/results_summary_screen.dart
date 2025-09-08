@@ -70,20 +70,7 @@ class ResultsSummaryScreen extends StatelessWidget {
                 },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24.0),
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.download_outlined),
-                label: const Text("Download results"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 60),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                ),
-              ),
-            ),
+            // The ElevatedButton for 'Download results' has been removed from here.
           ],
         ),
       ),
@@ -92,20 +79,19 @@ class ResultsSummaryScreen extends StatelessWidget {
 }
 
 // A widget for each item in the summary list
-// A widget for each item in the summary list
 class _SummaryTile extends StatelessWidget {
   final String title;
   final int score;
   final File? startImage; // <-- ADD THIS
-  final File? endImage;   // <-- ADD THIS
+  final File? endImage; // <-- ADD THIS
   final VoidCallback? onTap; // <-- ADD THIS
 
   const _SummaryTile({
     required this.title,
     required this.score,
     this.startImage, // <-- ADD THIS
-    this.endImage,   // <-- ADD THIS
-    this.onTap,      // <-- ADD THIS
+    this.endImage, // <-- ADD THIS
+    this.onTap, // <-- ADD THIS
   });
 
   @override
