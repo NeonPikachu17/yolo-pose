@@ -89,7 +89,7 @@ Follow these instructions to get a local copy up and running for development and
 1.  **Clone the repository:**
     ```sh
     git clone [https://github.com/NeonPikachu17/yolo-pose.git](https://github.com/NeonPikachu17/yolo-pose.git)
-    cd pose-vision-ai
+    cd yolo-pose
     ```
 
 2.  **Ensure Assets are Correctly Placed:**
