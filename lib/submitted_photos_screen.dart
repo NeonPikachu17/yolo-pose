@@ -74,13 +74,13 @@ List<int>? _getAngleKeypointIndices(String exerciseTitle, BodySide side) {
 String _getMovementGoal(String exerciseTitle) {
   switch (exerciseTitle) {
     case 'Shoulder Abduction':
-      return "90.0°";
+      return "85.0°";
     case 'Shoulder Flexion 0°-90°':
-      return "90.0°";
+      return "80.0°";
     case 'Shoulder Flexion 90°-180°':
-      return "170.0°";
+      return "150.0°";
     case 'Hand to Lumbar Spine':
-      return "<= 70.0°";
+      return "90.0°";
     default:
       return "N/A";
   }

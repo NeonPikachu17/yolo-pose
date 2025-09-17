@@ -123,7 +123,7 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     }
     return {
       'score': score,
-      'details': 'Target: 90.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
+      'details': 'Target: 85.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
@@ -159,7 +159,7 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     }
     return {
       'score': score,
-      'details': 'Target: 170.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
+      'details': 'Target: 150.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
@@ -191,7 +191,7 @@ class _TherapyHomeScreenState extends State<TherapyHomeScreen> {
     }
     return {
       'score': score,
-      'details': 'Target: <= 70.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
+      'details': 'Target: 90.0°, Achieved: ${endAngle.toStringAsFixed(1)}° (${side.name} side). $motionQuality'
     };
   }
 
