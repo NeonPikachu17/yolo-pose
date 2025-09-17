@@ -35,11 +35,8 @@ class _ExerciseUploadSheetState extends State<ExerciseUploadSheet> {
     final pickedFile = await picker.pickImage(source: source, imageQuality: 80);
 
     if (pickedFile != null) {
-      // --- INTEGRATION POINT ---
-      // Instead of using the file directly, first normalize it.
       final normalizedImageFile = await _normalizeImageOrientation(pickedFile.path);
-      onSelect(normalizedImageFile); // Use the corrected file
-      // --- END OF FIX ---
+      onSelect(normalizedImageFile);
     }
   }
 
